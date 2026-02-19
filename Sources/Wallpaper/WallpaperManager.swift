@@ -120,7 +120,7 @@ class WallpaperManager {
     }
 
     /// Download UHD image to cache, skip if already exists
-    func downloadImage(_ image: BingImage) async throws -> URL {
+    private func downloadImage(_ image: BingImage) async throws -> URL {
         try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
 
         let localURL = cacheDir.appendingPathComponent("\(image.startdate)_\(locale)_UHD.jpg")
@@ -137,7 +137,7 @@ class WallpaperManager {
     // MARK: - Cache
 
     /// Remove cached images older than 16 days
-    func cleanOldCache() {
+    private func cleanOldCache() {
         let fm = FileManager.default
         let cutoff = Date().addingTimeInterval(-16 * 86400)
         guard let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
