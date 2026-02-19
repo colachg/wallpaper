@@ -16,17 +16,17 @@ just run       # Release build → create .app bundle → open in Finder
 just build     # Release build only
 just bundle    # Build + create signed .app bundle in build/
 just install   # Install to /Applications/Wallpaper.app
+just test      # Run tests (Swift Testing framework)
 just clean     # Remove .build/ and build/ directories
 ```
 
-There are no tests or linting configured.
-
 ## Architecture
 
-Three-file MVVM structure:
+Four-file MVVM structure:
 
-- **WallpaperApp.swift** — `@main` SwiftUI app entry point. Menu bar window UI with image preview card, navigation arrows, dot indicators, and toolbar (refresh, launch-at-login, quit).
+- **WallpaperApp.swift** — `@main` SwiftUI app entry point. Menu bar window UI with image preview card, navigation arrows, dot indicators, and toolbar (refresh, launch-at-login, update, quit).
 - **WallpaperManager.swift** — `@MainActor @Observable` view model. Handles Bing API fetching (last 16 days via two paginated calls), UHD image downloading, file-based caching (`~/Library/Caches/BingWallpaper/`), wallpaper application to all screens, and hourly refresh timer.
+- **UpdateChecker.swift** — `@MainActor @Observable` auto-update checker. Polls GitHub releases daily, downloads zip, extracts, swaps app bundle in-place, and relaunches. Falls back to opening browser on failure.
 - **BingAPI.swift** — Codable models (`BingResponse`, `BingImage`) and `WallpaperError` enum.
 
 API endpoint: `https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n={count}&mkt={locale}`

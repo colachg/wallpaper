@@ -33,6 +33,10 @@ install: bundle
     rm -rf /Applications/{{app_name}}.app
     cp -R {{bundle_dir}} /Applications/{{app_name}}.app
 
+# Generate changelog
+changelog:
+    git cliff
+
 # Run tests
 test:
     swift test
