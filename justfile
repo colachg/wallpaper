@@ -5,13 +5,18 @@ bundle_dir := "build/" + app_name + ".app"
 build:
     swift build -c release
 
+# Generate app icon (Resources/AppIcon.icns)
+icon:
+    swift Scripts/generate-icon.swift
+
 # Create .app bundle from release build
-bundle: build
+bundle: build icon
     rm -rf {{bundle_dir}}
     mkdir -p {{bundle_dir}}/Contents/MacOS
     mkdir -p {{bundle_dir}}/Contents/Resources
     cp .build/release/{{app_name}} {{bundle_dir}}/Contents/MacOS/{{app_name}}
     cp Resources/Info.plist {{bundle_dir}}/Contents/
+    cp Resources/AppIcon.icns {{bundle_dir}}/Contents/Resources/
     codesign --force --sign - {{bundle_dir}}
 
 # Debug build + run raw executable (fast iteration)
