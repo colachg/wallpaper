@@ -1,13 +1,13 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 
 import PackageDescription
 
 let package = Package(
-    name: "BingWallpaper",
-    platforms: [.macOS(.v13)],
+    name: "Wallpaper",
+    platforms: [.macOS(.v15)],
     targets: [
         .executableTarget(
-            name: "BingWallpaper"
+            name: "Wallpaper"
         ),
     ]
 )

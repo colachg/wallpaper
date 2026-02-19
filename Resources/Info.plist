@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.colachen.BingWallpaper</string>
+    <string>com.colachg.Wallpaper</string>
     <key>CFBundleName</key>
-    <string>Bing Wallpaper</string>
+    <string>Wallpaper</string>
     <key>CFBundleExecutable</key>
-    <string>BingWallpaper</string>
+    <string>Wallpaper</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>

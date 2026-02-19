@@ -1,4 +1,4 @@
-app_name := "BingWallpaper"
+app_name := "Wallpaper"
 bundle_dir := "build/" + app_name + ".app"
 
 # Build release binary
