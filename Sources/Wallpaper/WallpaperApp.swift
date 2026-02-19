@@ -6,8 +6,13 @@ struct WallpaperApp: App {
     @State private var manager = WallpaperManager()
     @State private var updateChecker = UpdateChecker()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var refreshRotation = 0.0
+    @State private var refreshTrigger = 0
     @State private var isHoveringImage = false
+    @State private var showCopied = false
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
 
     init() {
         _manager.wrappedValue.start()
@@ -18,7 +23,6 @@ struct WallpaperApp: App {
         MenuBarExtra("Wallpaper", systemImage: "photo.on.rectangle") {
             VStack(spacing: 0) {
                 imageCard
-                dotIndicators
                 Divider()
                 toolbar
             }
@@ -85,6 +89,7 @@ struct WallpaperApp: App {
             .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
         }
         .onHover { isHoveringImage = $0 }
+        .onTapGesture { Task { await manager.applyCurrentWallpaper() } }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(8)
     }
@@ -104,54 +109,11 @@ struct WallpaperApp: App {
         .disabled(!enabled)
     }
 
-    // MARK: - Dot Indicators
-
-    @ViewBuilder
-    private var dotIndicators: some View {
-        if manager.images.count > 1 {
-            HStack(spacing: 5) {
-                ForEach(0..<manager.images.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == manager.images.count - 1 - manager.currentIndex ? Color.primary : Color.primary.opacity(0.2))
-                        .frame(width: 6, height: 6)
-                }
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-        }
-    }
-
     // MARK: - Toolbar
 
     private var toolbar: some View {
         HStack(spacing: 0) {
-            Button {
-                refreshRotation += 360
-                Task { await manager.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .rotationEffect(.degrees(refreshRotation))
-                    .animation(.linear(duration: 0.6), value: refreshRotation)
-            }
-            .disabled(manager.isLoading)
-            .help("Refresh")
-
-            Spacer()
-
-            Button {
-                launchAtLogin.toggle()
-                do {
-                    if launchAtLogin { try SMAppService.mainApp.register() }
-                    else { try SMAppService.mainApp.unregister() }
-                } catch { launchAtLogin.toggle() }
-            } label: {
-                Image(systemName: launchAtLogin ? "checkmark.circle.fill" : "circle")
-            }
-            .help("Launch at Login")
-
             if updateChecker.updateAvailable {
-                Spacer()
-
                 switch updateChecker.updateState {
                 case .idle:
                     Button { updateChecker.performUpdate() } label: {
@@ -178,7 +140,44 @@ struct WallpaperApp: App {
                     }
                     .help("Update failed — click to open release page")
                 }
+            } else {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(appVersion, forType: .string)
+                    showCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { showCopied = false }
+                } label: {
+                    Image(systemName: showCopied ? "checkmark.circle" : "info.circle")
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .help(showCopied ? "Copied!" : "Version \(appVersion)")
             }
+
+            Spacer()
+
+            Button {
+                refreshTrigger += 1
+                Task { await manager.refresh() }
+                Task { await updateChecker.checkForUpdate() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .symbolEffect(.rotate, value: refreshTrigger)
+            }
+            .disabled(manager.isLoading)
+            .help("Refresh")
+
+            Spacer()
+
+            Button {
+                launchAtLogin.toggle()
+                do {
+                    if launchAtLogin { try SMAppService.mainApp.register() }
+                    else { try SMAppService.mainApp.unregister() }
+                } catch { launchAtLogin.toggle() }
+            } label: {
+                Image(systemName: launchAtLogin ? "checkmark.circle.fill" : "circle")
+            }
+            .help("Launch at Login")
 
             Spacer()
 

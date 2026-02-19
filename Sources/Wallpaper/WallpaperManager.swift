@@ -11,6 +11,10 @@ class WallpaperManager {
     private(set) var images: [BingImage] = []
 
     private var timer: Timer?
+    private var wakeObserver: NSObjectProtocol?
+    private var screenWakeObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
+    private var activityToken: NSObjectProtocol?
 
     var locale: String {
         Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
@@ -21,30 +25,55 @@ class WallpaperManager {
             .appendingPathComponent("BingWallpaper")
     }
 
-    var hasPrevious: Bool { currentIndex < images.count - 1 }
+    var hasPrevious: Bool { !images.isEmpty && currentIndex < images.count - 1 }
     var hasNext: Bool { currentIndex > 0 }
 
     // MARK: - Lifecycle
 
-    /// Start the manager: fetch all images and schedule hourly refresh
+    /// Start the manager: fetch all images and schedule refresh every 6 hours + on wake
     func start() {
         guard timer == nil else { return }
         Task { await loadAll() }
-        timer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+
+        // Prevent App Nap from deferring the refresh timer
+        activityToken = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "Periodic wallpaper refresh"
+        )
+
+        timer = Timer.scheduledTimer(withTimeInterval: 21600, repeats: true) { [weak self] _ in
             Task { await self?.refresh() }
+        }
+
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.refresh() }
+        }
+        // On Apple Silicon, screen wake is more reliable than system wake for lid open
+        screenWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.refresh() }
+        }
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { await self?.applyCurrentWallpaper() }
         }
     }
 
     // MARK: - Fetching
 
-    /// Initial load: fetch the last 16 days of wallpapers (2 API calls of 8)
+    /// Initial load: fetch the last 10 days of wallpapers (2 API calls)
     private func loadAll() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         do {
             var allImages: [BingImage] = []
-            for idx in stride(from: 0, to: 16, by: 8) {
-                let fetched = try await fetchImages(idx: idx, count: 8)
+            for idx in stride(from: 0, to: 10, by: 5) {
+                let fetched = try await fetchImages(idx: idx, count: 5)
                 allImages.append(contentsOf: fetched)
             }
             guard !allImages.isEmpty else { throw WallpaperError.noImages }
@@ -60,6 +89,7 @@ class WallpaperManager {
 
     /// Refresh: check for the latest image only, insert if new, then apply it
     func refresh() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         do {
@@ -67,6 +97,7 @@ class WallpaperManager {
             if let latest = fetched.first {
                 if images.first?.startdate != latest.startdate {
                     images.insert(latest, at: 0)
+                    if images.count > 10 { images.removeLast(images.count - 10) }
                     cleanOldCache()
                 }
                 currentIndex = 0
@@ -90,14 +121,14 @@ class WallpaperManager {
     // MARK: - Navigation
 
     func previous() async {
-        guard hasPrevious else { return }
+        guard !isLoading, hasPrevious else { return }
         currentIndex += 1
         do { try await applyWallpaper(at: currentIndex) }
         catch { errorMessage = error.localizedDescription }
     }
 
     func next() async {
-        guard hasNext else { return }
+        guard !isLoading, hasNext else { return }
         currentIndex -= 1
         do { try await applyWallpaper(at: currentIndex) }
         catch { errorMessage = error.localizedDescription }
@@ -106,7 +137,13 @@ class WallpaperManager {
     // MARK: - Wallpaper
 
     /// Download the image (if not cached) and set it as wallpaper on all screens
+    func applyCurrentWallpaper() async {
+        do { try await applyWallpaper(at: currentIndex) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     private func applyWallpaper(at index: Int) async throws {
+        guard index >= 0, index < images.count else { return }
         let image = images[index]
         let localURL = try await downloadImage(image)
 
@@ -136,14 +173,17 @@ class WallpaperManager {
 
     // MARK: - Cache
 
-    /// Remove cached images older than 16 days
+    /// Remove cached images older than 10 days based on the date in the filename
     private func cleanOldCache() {
         let fm = FileManager.default
-        let cutoff = Date().addingTimeInterval(-16 * 86400)
-        guard let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -10, to: Date()),
+              let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) else { return }
         for file in files {
-            if let created = (try? fm.attributesOfItem(atPath: file.path))?[.creationDate] as? Date,
-               created < cutoff {
+            let name = file.lastPathComponent
+            let dateString = String(name.prefix(8))
+            if let fileDate = formatter.date(from: dateString), fileDate < cutoff {
                 try? fm.removeItem(at: file)
             }
         }

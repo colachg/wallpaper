@@ -24,8 +24,8 @@ just clean     # Remove .build/ and build/ directories
 
 Four-file MVVM structure:
 
-- **WallpaperApp.swift** — `@main` SwiftUI app entry point. Menu bar window UI with image preview card, navigation arrows, dot indicators, and toolbar (refresh, launch-at-login, update, quit).
-- **WallpaperManager.swift** — `@MainActor @Observable` view model. Handles Bing API fetching (last 16 days via two paginated calls), UHD image downloading, file-based caching (`~/Library/Caches/BingWallpaper/`), wallpaper application to all screens, and hourly refresh timer.
+- **WallpaperApp.swift** — `@main` SwiftUI app entry point. Menu bar window UI with image preview card, navigation arrows, and toolbar (refresh, launch-at-login, update, quit).
+- **WallpaperManager.swift** — `@MainActor @Observable` view model. Handles Bing API fetching (last 10 days via two paginated calls), UHD image downloading, file-based caching (`~/Library/Caches/BingWallpaper/`), wallpaper application to all screens, and 6-hour refresh timer.
 - **UpdateChecker.swift** — `@MainActor @Observable` auto-update checker. Polls GitHub releases daily, downloads zip, extracts, swaps app bundle in-place, and relaunches. Falls back to opening browser on failure.
 - **BingAPI.swift** — Codable models (`BingResponse`, `BingImage`) and `WallpaperError` enum.
 

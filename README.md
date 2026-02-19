@@ -4,32 +4,26 @@ A lightweight macOS menu bar app that sets your desktop wallpaper to the Bing da
 
 ## Features
 
-- Browse the last 16 days of Bing wallpapers with navigation arrows
-- UHD image quality on all connected displays
-- Locale-aware — fetches wallpapers for your system language
-- Hourly auto-refresh
+- Browse the last 10 days of Bing wallpapers
+- UHD quality on all connected displays
+- Locale-aware — fetches wallpapers matching your system language
+- Auto-refresh every 6 hours
 - Launch at login
-- Local image caching with automatic cleanup
-- No external dependencies — pure Swift + Apple frameworks
+- Auto-update
 
-## Requirements
+## Install
 
-- macOS 15 (Sequoia) or later
-- Swift 6.2+
-- [just](https://github.com/casey/just) (task runner)
+Download the latest `Wallpaper.app.zip` from [Releases](https://github.com/colachg/wallpaper/releases), unzip, and drag to `/Applications`.
 
-## Build & Install
+Since the app is not signed with an Apple Developer certificate, macOS will block it on first launch. To open it:
 
-```sh
-# Debug build + run (fast iteration)
-just dev
+1. Double-click `Wallpaper.app` — macOS will show a warning and refuse to open it
+2. Go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**
+3. Click **Open** in the confirmation dialog
 
-# Release build + open as .app bundle
-just run
+You only need to do this once. After that, the app opens normally.
 
-# Install to /Applications
-just install
-```
+Requires macOS 15 (Sequoia) or later.
 
 ## License
 
