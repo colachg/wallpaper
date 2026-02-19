@@ -4,12 +4,14 @@ import SwiftUI
 @main
 struct WallpaperApp: App {
     @State private var manager = WallpaperManager()
+    @State private var updateChecker = UpdateChecker()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var refreshRotation = 0.0
     @State private var isHoveringImage = false
 
     init() {
         _manager.wrappedValue.start()
+        _updateChecker.wrappedValue.start()
     }
 
     var body: some Scene {
@@ -146,6 +148,37 @@ struct WallpaperApp: App {
                 Image(systemName: launchAtLogin ? "checkmark.circle.fill" : "circle")
             }
             .help("Launch at Login")
+
+            if updateChecker.updateAvailable {
+                Spacer()
+
+                switch updateChecker.updateState {
+                case .idle:
+                    Button { updateChecker.performUpdate() } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    .help("Update to v\(updateChecker.latestVersion ?? "")")
+
+                case .downloading(let progress):
+                    ProgressView(value: progress)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .help("Downloading update... \(Int(progress * 100))%")
+
+                case .installing:
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Installing update...")
+
+                case .failed:
+                    Button { updateChecker.openReleasePage() } label: {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                    .help("Update failed — click to open release page")
+                }
+            }
 
             Spacer()
 
