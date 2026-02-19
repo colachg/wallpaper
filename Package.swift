@@ -9,5 +9,9 @@ let package = Package(
         .executableTarget(
             name: "Wallpaper"
         ),
+        .testTarget(
+            name: "WallpaperTests",
+            dependencies: ["Wallpaper"]
+        ),
     ]
 )
