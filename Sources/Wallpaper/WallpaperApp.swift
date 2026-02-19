@@ -6,6 +6,7 @@ struct WallpaperApp: App {
     @State private var manager = WallpaperManager()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var refreshRotation = 0.0
+    @State private var isHoveringImage = false
 
     init() {
         _manager.wrappedValue.start()
@@ -71,14 +72,17 @@ struct WallpaperApp: App {
                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
             )
 
-            // Navigation arrows
+            // Navigation arrows (visible on hover)
             HStack {
                 navArrow("chevron.left", enabled: manager.hasPrevious) { Task { await manager.previous() } }
                 Spacer()
                 navArrow("chevron.right", enabled: manager.hasNext) { Task { await manager.next() } }
             }
             .padding(.horizontal, 6)
+            .opacity(isHoveringImage ? 1 : 0)
+            .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
         }
+        .onHover { isHoveringImage = $0 }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(8)
     }
