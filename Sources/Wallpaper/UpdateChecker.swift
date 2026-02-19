@@ -183,7 +183,7 @@ final class UpdateChecker {
 
     // MARK: - Semver Comparison
 
-    static func isNewer(remote: String, than current: String) -> Bool {
+    nonisolated static func isNewer(remote: String, than current: String) -> Bool {
         let remoteParts = remote.split(separator: ".").compactMap { Int($0) }
         let currentParts = current.split(separator: ".").compactMap { Int($0) }
         let count = max(remoteParts.count, currentParts.count)
