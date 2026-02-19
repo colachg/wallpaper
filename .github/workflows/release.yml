@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Assemble .app bundle
+        run: |
+          APP="Wallpaper.app"
+          mkdir -p "$APP/Contents/MacOS"
+          mkdir -p "$APP/Contents/Resources"
+          cp .build/release/Wallpaper "$APP/Contents/MacOS/Wallpaper"
+          cp Resources/Info.plist "$APP/Contents/"
+          codesign --force --sign - "$APP"
+
+      - name: Create zip
+        run: ditto -c -k --keepParent Wallpaper.app Wallpaper.app.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: Wallpaper.app.zip
