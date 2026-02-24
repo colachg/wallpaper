@@ -9,9 +9,11 @@ struct WallpaperPreferences: Codable {
 final class PreferencesStore {
     static let shared = PreferencesStore()
     private(set) var preferences = WallpaperPreferences()
+    let fileURL: URL
 
-    private var fileURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    init(fileURL: URL? = nil) {
+        self.fileURL = fileURL ?? FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BingWallpaper")
             .appendingPathComponent("preferences.json")
     }
