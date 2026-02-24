@@ -8,6 +8,9 @@ class WallpaperManager {
     var isLoading = false
     var currentIndex = 0
     var previewImage: NSImage?
+    var showingFavorites = false
+    var favoriteIndex = 0
+    var favoritePreviewImage: NSImage?
     private(set) var images: [BingImage] = []
 
     private var timer: Timer?
@@ -16,11 +19,13 @@ class WallpaperManager {
     private var screenObserver: NSObjectProtocol?
     private var activityToken: NSObjectProtocol?
 
+    private let store = PreferencesStore.shared
+
     var locale: String {
         Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
     }
 
-    private var cacheDir: URL {
+    var cacheDir: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BingWallpaper")
     }
@@ -28,11 +33,91 @@ class WallpaperManager {
     var hasPrevious: Bool { !images.isEmpty && currentIndex < images.count - 1 }
     var hasNext: Bool { currentIndex > 0 }
 
+    // MARK: - Like/Dislike/Favorite Computed Properties
+
+    var isCurrentDisliked: Bool {
+        guard currentIndex >= 0, currentIndex < images.count else { return false }
+        return store.isDisliked(images[currentIndex].startdate)
+    }
+
+    var isCurrentFavorited: Bool {
+        guard currentIndex >= 0, currentIndex < images.count else { return false }
+        return store.isFavorited(images[currentIndex].startdate)
+    }
+
+    var favoriteImages: [BingImage] {
+        store.preferences.favorites
+    }
+
+    var currentFavorite: BingImage? {
+        let favs = favoriteImages
+        guard !favs.isEmpty, favoriteIndex >= 0, favoriteIndex < favs.count else { return nil }
+        return favs[favoriteIndex]
+    }
+
+    var hasPreviousFavorite: Bool { !favoriteImages.isEmpty && favoriteIndex < favoriteImages.count - 1 }
+    var hasNextFavorite: Bool { favoriteIndex > 0 }
+
+    func showFavorites() {
+        showingFavorites = true
+        favoriteIndex = 0
+        loadFavoritePreview()
+    }
+
+    func hideFavorites() async {
+        showingFavorites = false
+        await restoreNonDisliked()
+    }
+
+    func previousFavorite() {
+        guard hasPreviousFavorite else { return }
+        favoriteIndex += 1
+        loadFavoritePreview()
+    }
+
+    func nextFavorite() {
+        guard hasNextFavorite else { return }
+        favoriteIndex -= 1
+        loadFavoritePreview()
+    }
+
+    func removeCurrentFavorite() async {
+        guard let fav = currentFavorite else { return }
+        store.removeFavorite(fav)
+        if favoriteImages.isEmpty {
+            showingFavorites = false
+            await restoreNonDisliked()
+        } else {
+            favoriteIndex = min(favoriteIndex, favoriteImages.count - 1)
+            loadFavoritePreview()
+        }
+    }
+
+    /// When returning from favorites, ensure we're showing a non-disliked wallpaper
+    private func restoreNonDisliked() async {
+        if currentIndex >= 0, currentIndex < images.count, store.isDisliked(images[currentIndex].startdate) {
+            if let idx = images.firstIndex(where: { !store.isDisliked($0.startdate) }) {
+                currentIndex = idx
+                do { try await applyWallpaper(at: currentIndex) }
+                catch { errorMessage = error.localizedDescription }
+            }
+        }
+    }
+
+    private func loadFavoritePreview() {
+        guard let fav = currentFavorite else {
+            favoritePreviewImage = nil
+            return
+        }
+        favoritePreviewImage = cachedImage(for: fav)
+    }
+
     // MARK: - Lifecycle
 
     /// Start the manager: fetch all images and schedule refresh every 6 hours + on wake
     func start() {
         guard timer == nil else { return }
+        store.load()
         Task { await loadAll() }
 
         // Prevent App Nap from deferring the refresh timer
@@ -78,8 +163,13 @@ class WallpaperManager {
             }
             guard !allImages.isEmpty else { throw WallpaperError.noImages }
             images = allImages
-            currentIndex = 0
-            try await applyWallpaper(at: 0)
+            // Apply first non-disliked wallpaper
+            if let firstNonDisliked = allImages.firstIndex(where: { !store.isDisliked($0.startdate) }) {
+                currentIndex = firstNonDisliked
+            } else {
+                currentIndex = 0
+            }
+            try await applyWallpaper(at: currentIndex)
             cleanOldCache()
         } catch {
             errorMessage = error.localizedDescription
@@ -100,8 +190,11 @@ class WallpaperManager {
                     if images.count > 10 { images.removeLast(images.count - 10) }
                     cleanOldCache()
                 }
-                currentIndex = 0
-                try await applyWallpaper(at: 0)
+                // Only auto-apply the latest if it's not disliked
+                if !store.isDisliked(latest.startdate) {
+                    currentIndex = 0
+                    try await applyWallpaper(at: 0)
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -123,15 +216,104 @@ class WallpaperManager {
     func previous() async {
         guard !isLoading, hasPrevious else { return }
         currentIndex += 1
-        do { try await applyWallpaper(at: currentIndex) }
-        catch { errorMessage = error.localizedDescription }
+        await showOrApply(at: currentIndex)
     }
 
     func next() async {
         guard !isLoading, hasNext else { return }
         currentIndex -= 1
-        do { try await applyWallpaper(at: currentIndex) }
-        catch { errorMessage = error.localizedDescription }
+        await showOrApply(at: currentIndex)
+    }
+
+    /// Preview-only if disliked, otherwise apply as wallpaper
+    private func showOrApply(at index: Int) async {
+        guard index >= 0, index < images.count else { return }
+        let image = images[index]
+        if store.isDisliked(image.startdate) {
+            do { try await previewOnly(at: index) }
+            catch { errorMessage = error.localizedDescription }
+        } else {
+            do { try await applyWallpaper(at: index) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    /// Download and show in preview without setting as desktop wallpaper
+    private func previewOnly(at index: Int) async throws {
+        guard index >= 0, index < images.count else { return }
+        let image = images[index]
+        let localURL = try await downloadImage(image)
+        currentTitle = image.title
+        currentCopyright = image.copyright
+        previewImage = NSImage(contentsOf: localURL)
+    }
+
+    // MARK: - Like/Dislike/Favorite Actions
+
+    func dislike() async {
+        guard currentIndex >= 0, currentIndex < images.count else { return }
+        let image = images[currentIndex]
+        store.addDislike(image.startdate)
+        // Remove from favorites if present
+        store.removeFavorite(image)
+        await navigateToNextNonDisliked()
+    }
+
+    func undoDislike() {
+        guard currentIndex >= 0, currentIndex < images.count else { return }
+        store.removeDislike(images[currentIndex].startdate)
+    }
+
+    func toggleFavorite() {
+        guard currentIndex >= 0, currentIndex < images.count else { return }
+        let image = images[currentIndex]
+        if store.isFavorited(image.startdate) {
+            store.removeFavorite(image)
+        } else {
+            store.addFavorite(image)
+            // Remove dislike if adding to favorites
+            store.removeDislike(image.startdate)
+        }
+    }
+
+    func applyFavorite(_ image: BingImage) async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let localURL = try await downloadImage(image)
+            for screen in NSScreen.screens {
+                try NSWorkspace.shared.setDesktopImageURL(localURL, for: screen)
+            }
+            currentTitle = image.title
+            currentCopyright = image.copyright
+            previewImage = NSImage(contentsOf: localURL)
+            // If image is in our loaded list, update currentIndex
+            if let idx = images.firstIndex(where: { $0.startdate == image.startdate }) {
+                currentIndex = idx
+            }
+            showingFavorites = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    func cachedImage(for image: BingImage) -> NSImage? {
+        let localURL = cacheDir.appendingPathComponent("\(image.startdate)_\(locale)_UHD.jpg")
+        return NSImage(contentsOf: localURL)
+    }
+
+    private func navigateToNextNonDisliked() async {
+        // Try newer images first (lower indices), then older images
+        let candidates = Array(0..<images.count).filter { $0 != currentIndex && !store.isDisliked(images[$0].startdate) }
+        // Prefer the nearest newer image (lower index)
+        if let next = candidates.first(where: { $0 < currentIndex }) ?? candidates.first {
+            currentIndex = next
+            do { try await applyWallpaper(at: currentIndex) }
+            catch { errorMessage = error.localizedDescription }
+        } else {
+            errorMessage = "All wallpapers are disliked"
+        }
     }
 
     // MARK: - Wallpaper
@@ -173,16 +355,18 @@ class WallpaperManager {
 
     // MARK: - Cache
 
-    /// Remove cached images older than 10 days based on the date in the filename
+    /// Remove cached images older than 10 days, but keep favorites
     private func cleanOldCache() {
         let fm = FileManager.default
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
+        let favDates = store.favoriteDates()
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -10, to: Date()),
               let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) else { return }
         for file in files {
             let name = file.lastPathComponent
             let dateString = String(name.prefix(8))
+            if favDates.contains(dateString) { continue }
             if let fileDate = formatter.date(from: dateString), fileDate < cutoff {
                 try? fm.removeItem(at: file)
             }

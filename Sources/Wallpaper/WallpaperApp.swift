@@ -22,7 +22,11 @@ struct WallpaperApp: App {
     var body: some Scene {
         MenuBarExtra("Wallpaper", systemImage: "photo.on.rectangle") {
             VStack(spacing: 0) {
-                imageCard
+                if manager.showingFavorites {
+                    favoritesPanel
+                } else {
+                    imageCard
+                }
                 Divider()
                 toolbar
             }
@@ -78,27 +82,75 @@ struct WallpaperApp: App {
                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
             )
 
+            // Action buttons at top corners (visible on hover)
+            VStack {
+                HStack {
+                    actionButton(
+                        icon: manager.isCurrentDisliked ? "hand.thumbsdown.fill" : "hand.thumbsdown",
+                        tint: manager.isCurrentDisliked ? .orange : nil,
+                        enabled: !manager.images.isEmpty
+                    ) {
+                        if manager.isCurrentDisliked {
+                            manager.undoDislike()
+                        } else {
+                            Task { await manager.dislike() }
+                        }
+                    }
+
+                    Spacer()
+
+                    actionButton(
+                        icon: manager.isCurrentFavorited ? "hand.thumbsup.fill" : "hand.thumbsup",
+                        tint: manager.isCurrentFavorited ? .blue : nil,
+                        enabled: !manager.images.isEmpty
+                    ) { manager.toggleFavorite() }
+                }
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
+
+                Spacer()
+            }
+            .opacity(isHoveringImage ? 1 : 0)
+            .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
+
             // Navigation arrows (visible on hover)
             HStack {
-                navArrow("chevron.left", enabled: manager.hasPrevious) { Task { await manager.previous() } }
+                actionButton(
+                    icon: "chevron.left",
+                    enabled: manager.hasPrevious
+                ) { Task { await manager.previous() } }
+
                 Spacer()
-                navArrow("chevron.right", enabled: manager.hasNext) { Task { await manager.next() } }
+
+                actionButton(
+                    icon: "chevron.right",
+                    enabled: manager.hasNext
+                ) { Task { await manager.next() } }
             }
             .padding(.horizontal, 6)
             .opacity(isHoveringImage ? 1 : 0)
             .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
         }
         .onHover { isHoveringImage = $0 }
-        .onTapGesture { Task { await manager.applyCurrentWallpaper() } }
+        .onTapGesture {
+            if !manager.isCurrentDisliked {
+                Task { await manager.applyCurrentWallpaper() }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(8)
     }
 
-    private func navArrow(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func actionButton(
+        icon: String,
+        tint: Color? = nil,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(tint ?? .white)
                 .frame(width: 28, height: 28)
                 .background(.ultraThinMaterial.opacity(0.8))
                 .clipShape(Circle())
@@ -107,6 +159,97 @@ struct WallpaperApp: App {
         .buttonStyle(.plain)
         .opacity(enabled ? 1 : 0)
         .disabled(!enabled)
+    }
+
+    // MARK: - Favorites Panel
+
+    private var favoritesPanel: some View {
+        ZStack(alignment: .bottom) {
+            if let fav = manager.currentFavorite {
+                if let image = manager.favoritePreviewImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(16 / 9, contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(.quaternary)
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                        }
+                }
+
+                // Title overlay
+                VStack(alignment: .leading, spacing: 2) {
+                    Spacer()
+                    Text(fav.title)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(2)
+                    Text(fav.formattedDate)
+                        .font(.caption2)
+                        .opacity(0.8)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(
+                    LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                )
+
+                // Top-right actions (visible on hover)
+                VStack {
+                    HStack {
+                        Spacer()
+                        actionButton(icon: "desktopcomputer", enabled: true) {
+                            Task { await manager.applyFavorite(fav) }
+                        }
+                        actionButton(icon: "heart.slash.fill", tint: .pink, enabled: true) {
+                            Task { await manager.removeCurrentFavorite() }
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.top, 6)
+                    Spacer()
+                }
+                .opacity(isHoveringImage ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
+
+                // Navigation arrows (visible on hover)
+                HStack {
+                    actionButton(icon: "chevron.left", enabled: manager.hasPreviousFavorite) {
+                        manager.previousFavorite()
+                    }
+                    Spacer()
+                    actionButton(icon: "chevron.right", enabled: manager.hasNextFavorite) {
+                        manager.nextFavorite()
+                    }
+                }
+                .padding(.horizontal, 6)
+                .opacity(isHoveringImage ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isHoveringImage)
+            } else {
+                Rectangle()
+                    .fill(.quaternary)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .overlay {
+                        VStack(spacing: 8) {
+                            Image(systemName: "heart.slash")
+                                .font(.title)
+                                .foregroundStyle(.secondary)
+                            Text("No favorites yet")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+            }
+        }
+        .onHover { isHoveringImage = $0 }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(8)
     }
 
     // MARK: - Toolbar
@@ -152,6 +295,20 @@ struct WallpaperApp: App {
                 }
                 .help(showCopied ? "Copied!" : "Version \(appVersion)")
             }
+
+            Spacer()
+
+            Button {
+                if manager.showingFavorites {
+                    Task { await manager.hideFavorites() }
+                } else {
+                    manager.showFavorites()
+                }
+            } label: {
+                Image(systemName: manager.showingFavorites ? "heart.fill" : "heart")
+                    .foregroundStyle(manager.showingFavorites ? .pink : .primary)
+            }
+            .help("Favorites")
 
             Spacer()
 
