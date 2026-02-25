@@ -58,10 +58,10 @@ class WallpaperManager {
     var hasPreviousFavorite: Bool { !favoriteImages.isEmpty && favoriteIndex < favoriteImages.count - 1 }
     var hasNextFavorite: Bool { favoriteIndex > 0 }
 
-    func showFavorites() {
+    func showFavorites() async {
         showingFavorites = true
         favoriteIndex = 0
-        loadFavoritePreview()
+        await applyFavoriteAtIndex()
     }
 
     func hideFavorites() async {
@@ -69,16 +69,16 @@ class WallpaperManager {
         await restoreNonDisliked()
     }
 
-    func previousFavorite() {
+    func previousFavorite() async {
         guard hasPreviousFavorite else { return }
         favoriteIndex += 1
-        loadFavoritePreview()
+        await applyFavoriteAtIndex()
     }
 
-    func nextFavorite() {
+    func nextFavorite() async {
         guard hasNextFavorite else { return }
         favoriteIndex -= 1
-        loadFavoritePreview()
+        await applyFavoriteAtIndex()
     }
 
     func removeCurrentFavorite() async {
@@ -89,7 +89,7 @@ class WallpaperManager {
             await restoreNonDisliked()
         } else {
             favoriteIndex = min(favoriteIndex, favoriteImages.count - 1)
-            loadFavoritePreview()
+            await applyFavoriteAtIndex()
         }
     }
 
@@ -104,12 +104,22 @@ class WallpaperManager {
         }
     }
 
-    private func loadFavoritePreview() {
+    /// Download favorite at current index (if needed), apply to all screens, update preview
+    private func applyFavoriteAtIndex() async {
         guard let fav = currentFavorite else {
             favoritePreviewImage = nil
             return
         }
-        favoritePreviewImage = cachedImage(for: fav)
+        do {
+            let localURL = try await downloadImage(fav)
+            for screen in NSScreen.screens {
+                try NSWorkspace.shared.setDesktopImageURL(localURL, for: screen)
+            }
+            favoritePreviewImage = NSImage(contentsOf: localURL)
+        } catch {
+            errorMessage = error.localizedDescription
+            favoritePreviewImage = cachedImage(for: fav)
+        }
     }
 
     // MARK: - Lifecycle

@@ -96,14 +96,16 @@ struct WallpaperApp: App {
                             Task { await manager.dislike() }
                         }
                     }
+                    .help(manager.isCurrentDisliked ? "Unskip" : "Skip this wallpaper")
 
                     Spacer()
 
                     actionButton(
-                        icon: manager.isCurrentFavorited ? "hand.thumbsup.fill" : "hand.thumbsup",
-                        tint: manager.isCurrentFavorited ? .blue : nil,
+                        icon: manager.isCurrentFavorited ? "star.fill" : "star",
+                        tint: manager.isCurrentFavorited ? .yellow : nil,
                         enabled: !manager.images.isEmpty
                     ) { manager.toggleFavorite() }
+                    .help(manager.isCurrentFavorited ? "Remove from Favorites" : "Add to Favorites")
                 }
                 .padding(.horizontal, 6)
                 .padding(.top, 6)
@@ -204,9 +206,6 @@ struct WallpaperApp: App {
                 VStack {
                     HStack {
                         Spacer()
-                        actionButton(icon: "desktopcomputer", enabled: true) {
-                            Task { await manager.applyFavorite(fav) }
-                        }
                         actionButton(icon: "heart.slash.fill", tint: .pink, enabled: true) {
                             Task { await manager.removeCurrentFavorite() }
                         }
@@ -221,11 +220,11 @@ struct WallpaperApp: App {
                 // Navigation arrows (visible on hover)
                 HStack {
                     actionButton(icon: "chevron.left", enabled: manager.hasPreviousFavorite) {
-                        manager.previousFavorite()
+                        Task { await manager.previousFavorite() }
                     }
                     Spacer()
                     actionButton(icon: "chevron.right", enabled: manager.hasNextFavorite) {
-                        manager.nextFavorite()
+                        Task { await manager.nextFavorite() }
                     }
                 }
                 .padding(.horizontal, 6)
@@ -248,6 +247,11 @@ struct WallpaperApp: App {
             }
         }
         .onHover { isHoveringImage = $0 }
+        .onTapGesture {
+            if let fav = manager.currentFavorite {
+                Task { await manager.applyFavorite(fav) }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(8)
     }
@@ -302,13 +306,13 @@ struct WallpaperApp: App {
                 if manager.showingFavorites {
                     Task { await manager.hideFavorites() }
                 } else {
-                    manager.showFavorites()
+                    Task { await manager.showFavorites() }
                 }
             } label: {
                 Image(systemName: manager.showingFavorites ? "heart.fill" : "heart")
                     .foregroundStyle(manager.showingFavorites ? .pink : .primary)
             }
-            .help("Favorites")
+            .help("Browse Favorites")
 
             Spacer()
 
