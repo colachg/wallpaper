@@ -260,18 +260,19 @@ class WallpaperManager {
 
     // MARK: - Like/Dislike/Favorite Actions
 
-    func dislike() async {
+    func dislike() {
         guard currentIndex >= 0, currentIndex < images.count else { return }
         let image = images[currentIndex]
         store.addDislike(image.startdate)
         // Remove from favorites if present
         store.removeFavorite(image)
-        await navigateToNextNonDisliked()
     }
 
-    func undoDislike() {
+    func undoDislike() async {
         guard currentIndex >= 0, currentIndex < images.count else { return }
         store.removeDislike(images[currentIndex].startdate)
+        do { try await applyWallpaper(at: currentIndex) }
+        catch { errorMessage = error.localizedDescription }
     }
 
     func toggleFavorite() {
@@ -313,18 +314,6 @@ class WallpaperManager {
         return NSImage(contentsOf: localURL)
     }
 
-    private func navigateToNextNonDisliked() async {
-        // Try newer images first (lower indices), then older images
-        let candidates = Array(0..<images.count).filter { $0 != currentIndex && !store.isDisliked(images[$0].startdate) }
-        // Prefer the nearest newer image (lower index)
-        if let next = candidates.first(where: { $0 < currentIndex }) ?? candidates.first {
-            currentIndex = next
-            do { try await applyWallpaper(at: currentIndex) }
-            catch { errorMessage = error.localizedDescription }
-        } else {
-            errorMessage = "All wallpapers are disliked"
-        }
-    }
 
     // MARK: - Wallpaper
 

@@ -91,9 +91,9 @@ struct WallpaperApp: App {
                         enabled: !manager.images.isEmpty
                     ) {
                         if manager.isCurrentDisliked {
-                            manager.undoDislike()
+                            Task { await manager.undoDislike() }
                         } else {
-                            Task { await manager.dislike() }
+                            manager.dislike()
                         }
                     }
                     .help(manager.isCurrentDisliked ? "Unskip" : "Skip this wallpaper")
