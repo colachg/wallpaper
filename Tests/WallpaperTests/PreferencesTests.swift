@@ -176,6 +176,36 @@ struct PreferencesStoreTests {
         #expect(store.preferences.favorites.isEmpty)
     }
 
+    @Test("favoriteImages returns favorites sorted by startdate descending")
+    @MainActor func favoritesSortedByDate() {
+        let store = makeStore()
+        // Add favorites in non-chronological order
+        store.addFavorite(BingImage(startdate: "20260215", urlbase: "/1", copyright: "©", title: "Jan 15"))
+        store.addFavorite(BingImage(startdate: "20260220", urlbase: "/2", copyright: "©", title: "Jan 20"))
+        store.addFavorite(BingImage(startdate: "20260210", urlbase: "/3", copyright: "©", title: "Jan 10"))
+
+        let sorted = store.preferences.favorites.sorted { $0.startdate > $1.startdate }
+        #expect(sorted[0].startdate == "20260220")
+        #expect(sorted[1].startdate == "20260215")
+        #expect(sorted[2].startdate == "20260210")
+    }
+
+    @Test("newly added favorite maintains date-sorted order")
+    @MainActor func newFavoriteMaintainsDateOrder() {
+        let store = makeStore()
+        // Add initial favorites
+        store.addFavorite(BingImage(startdate: "20260210", urlbase: "/1", copyright: "©", title: "Jan 10"))
+        store.addFavorite(BingImage(startdate: "20260220", urlbase: "/2", copyright: "©", title: "Jan 20"))
+        // Add a new favorite with a date between the existing ones
+        store.addFavorite(BingImage(startdate: "20260215", urlbase: "/3", copyright: "©", title: "Jan 15"))
+
+        let sorted = store.preferences.favorites.sorted { $0.startdate > $1.startdate }
+        #expect(sorted.count == 3)
+        #expect(sorted[0].startdate == "20260220")
+        #expect(sorted[1].startdate == "20260215")
+        #expect(sorted[2].startdate == "20260210")
+    }
+
     @Test("load with corrupted file resets to defaults")
     @MainActor func loadCorrupted() {
         let url = FileManager.default.temporaryDirectory
