@@ -46,7 +46,7 @@ class WallpaperManager {
     }
 
     var favoriteImages: [BingImage] {
-        store.preferences.favorites
+        store.preferences.favorites.sorted { $0.startdate > $1.startdate }
     }
 
     var currentFavorite: BingImage? {

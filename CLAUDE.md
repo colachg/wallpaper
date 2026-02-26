@@ -36,3 +36,13 @@ API endpoint: `https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n={c
 - Bundle ID: `com.colachg.Wallpaper`
 - `LSUIElement: true` (menu bar only, no dock icon)
 - Info.plist lives in `Resources/` and is copied into the bundle by `just bundle`
+
+## Active Technologies
+- Swift 6.2+ (strict concurrency mode) + SwiftUI, AppKit (Apple frameworks only) (002-refactor-favorites-ux)
+- File-based — JSON preferences, cached JPEG images (002-refactor-favorites-ux)
+- Swift 6.2+ (strict concurrency) + SwiftUI, AppKit, Foundation (003-fix-dislike-behavior)
+- File-based (JSON preferences, cached JPEGs) (003-fix-dislike-behavior)
+- File-based — JSON preferences at `~/Library/Application Support/BingWallpaper/preferences.json` (004-sort-favorites-by-date)
+
+## Recent Changes
+- 002-refactor-favorites-ux: Added Swift 6.2+ (strict concurrency mode) + SwiftUI, AppKit (Apple frameworks only)
