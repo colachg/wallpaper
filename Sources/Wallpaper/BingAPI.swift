@@ -27,11 +27,13 @@ struct BingImage: Codable, Hashable, Identifiable {
 enum WallpaperError: LocalizedError {
     case noImages
     case downloadFailed
+    case invalidURL
 
     var errorDescription: String? {
         switch self {
         case .noImages: return "No images found"
         case .downloadFailed: return "Failed to download image"
+        case .invalidURL: return "Invalid image URL"
         }
     }
 }

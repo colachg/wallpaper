@@ -31,6 +31,9 @@ struct WallpaperApp: App {
                 toolbar
             }
             .frame(width: 320)
+            // The login item can be toggled in System Settings while we run, so re-read
+            // it every time the window opens instead of trusting the launch-time snapshot
+            .onAppear { launchAtLogin = SMAppService.mainApp.status == .enabled }
         }
         .menuBarExtraStyle(.window)
     }
@@ -330,11 +333,13 @@ struct WallpaperApp: App {
             Spacer()
 
             Button {
-                launchAtLogin.toggle()
                 do {
-                    if launchAtLogin { try SMAppService.mainApp.register() }
-                    else { try SMAppService.mainApp.unregister() }
-                } catch { launchAtLogin.toggle() }
+                    if launchAtLogin { try SMAppService.mainApp.unregister() }
+                    else { try SMAppService.mainApp.register() }
+                } catch {
+                    // Fall through — the status re-read below reports what actually happened
+                }
+                launchAtLogin = SMAppService.mainApp.status == .enabled
             } label: {
                 Image(systemName: launchAtLogin ? "checkmark.circle.fill" : "circle")
             }

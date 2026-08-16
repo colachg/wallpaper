@@ -9,6 +9,8 @@ struct WallpaperPreferences: Codable {
 final class PreferencesStore {
     static let shared = PreferencesStore()
     private(set) var preferences = WallpaperPreferences()
+    /// Favorites in newest-first order, kept in sync on mutation so callers never re-sort
+    private(set) var sortedFavorites: [BingImage] = []
     let fileURL: URL
 
     init(fileURL: URL? = nil) {
@@ -20,12 +22,17 @@ final class PreferencesStore {
 
     func load() {
         let fm = FileManager.default
+        defer { rebuildSortedFavorites() }
         guard fm.fileExists(atPath: fileURL.path) else { return }
         do {
             let data = try Data(contentsOf: fileURL)
             preferences = try JSONDecoder().decode(WallpaperPreferences.self, from: data)
         } catch {
-            // If corrupted, start fresh
+            // Start fresh, but move the unreadable file aside first: otherwise the next
+            // save() would overwrite it and destroy every favorite and dislike for good.
+            let backupURL = fileURL.appendingPathExtension("corrupt")
+            try? fm.removeItem(at: backupURL)
+            try? fm.moveItem(at: fileURL, to: backupURL)
             preferences = WallpaperPreferences()
         }
     }
@@ -63,11 +70,13 @@ final class PreferencesStore {
     func addFavorite(_ image: BingImage) {
         guard !preferences.favorites.contains(where: { $0.startdate == image.startdate }) else { return }
         preferences.favorites.append(image)
+        rebuildSortedFavorites()
         save()
     }
 
     func removeFavorite(_ image: BingImage) {
         preferences.favorites.removeAll { $0.startdate == image.startdate }
+        rebuildSortedFavorites()
         save()
     }
 
@@ -77,5 +86,9 @@ final class PreferencesStore {
 
     func favoriteDates() -> Set<String> {
         Set(preferences.favorites.map(\.startdate))
+    }
+
+    private func rebuildSortedFavorites() {
+        sortedFavorites = preferences.favorites.sorted { $0.startdate > $1.startdate }
     }
 }
