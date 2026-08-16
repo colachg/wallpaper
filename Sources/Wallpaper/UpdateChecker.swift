@@ -184,8 +184,11 @@ final class UpdateChecker {
     // MARK: - Semver Comparison
 
     nonisolated static func isNewer(remote: String, than current: String) -> Bool {
-        let remoteParts = remote.split(separator: ".").compactMap { Int($0) }
-        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        // Parse strictly: dropping unparseable components would shift the remaining ones
+        // into the wrong significance position (e.g. "1.beta.5" comparing 5 against minor).
+        guard let remoteParts = versionComponents(remote),
+              let currentParts = versionComponents(current)
+        else { return false }
         let count = max(remoteParts.count, currentParts.count)
         for i in 0..<count {
             let r = i < remoteParts.count ? remoteParts[i] : 0
@@ -194,6 +197,21 @@ final class UpdateChecker {
             if r < c { return false }
         }
         return false
+    }
+
+    /// Split "1.2.3" into [1, 2, 3], tolerating a trailing pre-release suffix such as
+    /// "3-rc1". Returns nil if any component has no leading digits.
+    private nonisolated static func versionComponents(_ version: String) -> [Int]? {
+        let parts = version.split(separator: ".")
+        guard !parts.isEmpty else { return nil }
+
+        var numbers: [Int] = []
+        for part in parts {
+            let digits = part.prefix { $0.isNumber }
+            guard let value = Int(digits) else { return nil }
+            numbers.append(value)
+        }
+        return numbers
     }
 }
 
